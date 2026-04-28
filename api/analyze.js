@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: "claude-3-haiku-20240307",
+        model: "claude-3-5-haiku-latest",
         max_tokens: 200,
         temperature: 0,
         messages: [
@@ -77,11 +77,13 @@ ${textoCorto}
       const parsed = JSON.parse(text);
       return res.status(200).json(parsed);
     } catch {
+      const hoy = new Date().toISOString().slice(0, 10);
+
       return res.status(200).json({
         emisor: "SIN_IDENTIFICAR",
         tipo_retencion: "Otro",
-        fecha: new Date().toISOString().slice(0, 10),
-        nuevo_nombre: `SIN_IDENTIFICAR - Otro - ${new Date().toISOString().slice(0, 10)}.pdf`,
+        fecha: hoy,
+        nuevo_nombre: `SIN_IDENTIFICAR - Otro - ${hoy}.pdf`,
         raw: text
       });
     }
