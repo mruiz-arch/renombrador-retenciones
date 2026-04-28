@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Renombrador de Retenciones</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #F5F4F0; --surface: #FFFFFF; --border: #E2E0D8; --border-strong: #C8C5BB;
+      --text: #1A1916; --text-muted: #6B6860; --text-hint: #9E9C95;
+      --blue: #1A56DB; --blue-light: #EBF2FF; --blue-border: #B4CEFF;
+      --green: #166534; --green-light: #DCFCE7; --green-border: #86EFAC;
+      --red: #991B1B; --red-light: #FEE2E2; --radius: 10px; --radius-sm: 6px;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1rem; }
+    .container { max-width: 680px; margin: 0 auto; }
+    header { margin-bottom: 2.5rem; }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem; }
+    .logo-icon { width: 36px; height: 36px; background: var(--text); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
+    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+    .subtitle { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+    .format-tag { display: inline-block; font-family: 'DM Mono', monospace; font-size: 12px; background: var(--text); color: var(--bg); padding: 4px 10px; border-radius: 4px; margin-top: 10px; }
+    #drop-zone { border: 1.5px dashed var(--border-strong); border-radius: var(--radius); padding: 2.5rem 2rem; text-align: center; cursor: pointer; transition: background 0.15s, border-color 0.15s; background: var(--surface); margin-bottom: 1.25rem; }
+    #drop-zone:hover, #drop-zone.drag-over { border-color: var(--blue); background: var(--blue-light); }
+    .drop-icon { width: 44px; height: 44px; background: var(--blue-light); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
+    #drop-zone p { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+    #drop-zone span { font-size: 13px; color: var(--text-muted); }
+    #file-input { display: none; }
+    .file-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 1rem; transition: border-color 0.15s; }
+    .file-card.status-done { border-color: var(--green-border); }
+    .file-card.status-error { border-color: #FCA5A5; }
+    .file-thumb { width: 38px; height: 46px; background: var(--blue-light); border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--blue); font-weight: 500; }
+    .file-info { flex: 1; min-width: 0; }
+    .file-original { font-size: 12px; color: var(--text-hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+    .file-renamed { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--text); word-break: break-all; }
+    .file-renamed[contenteditable="true"] { border: 1px solid var(--border); border-radius: 4px; padding: 3px 7px; outline: none; background: var(--bg); width: 100%; display: block; }
+    .file-renamed[contenteditable="true"]:focus { border-color: var(--blue); }
+    .edit-hint { font-size: 11px; color: var(--text-hint); margin-top: 3px; }
+    .badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+    .badge-waiting { background: #F1F0EC; color: var(--text-muted); }
+    .badge-analyzing { background: var(--blue-light); color: var(--blue); }
+    .badge-done { background: var(--green-light); color: var(--green); }
+    .badge-error { background: var(--red-light); color: var(--red); }
+    .spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--blue-border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .download-btn { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; color: var(--text-muted); transition: background 0.15s, color 0.15s; }
+    .download-btn:hover { background: var(--green-light); color: var(--green); border-color: var(--green-border); }
+    .action-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 1.25rem; }
+    .btn-main { background: var(--text); color: #fff; border: none; border-radius: var(--radius-sm); padding: 10px 22px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+    .btn-main:hover { opacity: 0.8; }
+    .btn-main:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 10px 22px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+    .btn-secondary:hover { background: var(--border); }
+    .progress-text { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+    footer { margin-top: 3rem; text-align: center; font-size: 12px; color: var(--text-hint); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <path d="M9 13h6M9 17h4"/>
+        </svg>
+      </div>
+      <h1>Renombrador de Retenciones</h1>
+    </div>
+    <p class="subtitle">Subí tus comprobantes PDF y la IA los renombra automáticamente</p>
+    <div class="format-tag">emisor _ tipo-retencion _ fecha.pdf</div>
+  </header>
+
+  <div id="drop-zone"
+    onclick="document.getElementById('file-input').click()"
+    ondragover="handleDragOver(event)"
+    ondragleave="handleDragLeave(event)"
+    ondrop="handleDrop(event)">
+    <div class="drop-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1A56DB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="12" x2="12" y2="18"/>
+        <line x1="9" y1="15" x2="15" y2="15"/>
+      </svg>
+    </div>
+    <p>Arrastrá tus PDFs acá</p>
+    <span>o hacé clic para seleccionarlos</span>
+  </div>
+  <input type="file" id="file-input" multiple accept=".pdf" onchange="handleFiles(this.files)">
+
+  <div id="file-list"></div>
+
+  <div class="action-bar" id="action-bar" style="display:none;">
+    <button class="btn-main" id="btn-analyze" onclick="analyzeAll()">Renombrar con IA</button>
+    <button class="btn-secondary" onclick="clearAll()">Limpiar</button>
+    <span class="progress-text" id="progress-text"></span>
+  </div>
+
+  <footer>Powered by Claude AI · Los archivos nunca se almacenan en ningún servidor</footer>
+</div>
+
+<script>
+  const files = [];
+  let analyzing = false;
+
+  function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+  function handleDragLeave() { document.getElementById('drop-zone').classList.remove('drag-over'); }
+  function handleDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('drag-over'); handleFiles(e.dataTransfer.files); }
+
+  function handleFiles(fileList) {
+    for (const f of fileList) {
+      if (f.type === 'application/pdf' && !files.find(x => x.file.name === f.name && x.file.size === f.size)) {
+        files.push({ file: f, status: 'waiting', newName: null });
+      }
+    }
+    renderList();
+    document.getElementById('action-bar').style.display = files.length ? 'flex' : 'none';
+  }
+
+  function renderList() {
+    const el = document.getElementById('file-list');
+    el.innerHTML = files.map((f, i) => {
+      const badgeClass = { waiting:'badge-waiting', analyzing:'badge-analyzing', done:'badge-done', error:'badge-error' }[f.status];
+      const badgeText = { waiting:'Pendiente', analyzing:'<span class="spinner"></span>Analizando…', done:'Listo', error:'Error' }[f.status];
+      const nameEl = f.status === 'done'
+        ? `<div class="file-renamed" contenteditable="true" spellcheck="false" onblur="updateName(${i}, this.innerText)">${esc(f.newName)}</div><p class="edit-hint">Hacé clic para editar el nombre</p>`
+        : `<div class="file-renamed" style="color:var(--text-hint); font-family:'DM Sans',sans-serif; font-size:13px;">${f.status === 'analyzing' ? 'Procesando...' : 'Esperando análisis'}</div>`;
+      const dlBtn = f.status === 'done'
+        ? `<button class="download-btn" title="Descargar" onclick="downloadFile(${i})">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>` : '';
+      return `<div class="file-card status-${f.status}">
+        <div class="file-thumb">PDF</div>
+        <div class="file-info">
+          <div class="file-original">${esc(f.file.name)}</div>
+          ${nameEl}
+        </div>
+        <span class="badge ${badgeClass}">${badgeText}</span>
+        ${dlBtn}
+      </div>`;
+    }).join('');
+  }
+
+  function esc(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function updateName(i, val) { files[i].newName = sanitize(val.trim()); }
+
+  async function analyzeAll() {
+    if (analyzing) return;
+    analyzing = true;
+    document.getElementById('btn-analyze').disabled = true;
+    const total = files.filter(f => f.status === 'waiting').length;
+    let done = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].status !== 'waiting') continue;
+      files[i].status = 'analyzing';
+      renderList();
+      document.getElementById('progress-text').textContent = `Analizando ${done + 1} de ${total}...`;
+      try {
+        const base64 = await toBase64(files[i].file);
+        const name = await analyzeWithBackend(base64);
+        files[i].newName = sanitize(name);
+        files[i].status = 'done';
+        done++;
+      } catch(err) {
+        files[i].status = 'error';
+        console.error(err);
+      }
+      renderList();
+    }
+
+    analyzing = false;
+    document.getElementById('btn-analyze').disabled = false;
+    document.getElementById('progress-text').textContent = `${done} de ${total} archivos renombrados.`;
+  }
+
+  function sanitize(name) {
+    let n = name.trim().replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '-');
+    if (!n.toLowerCase().endsWith('.pdf')) n += '.pdf';
+    return n;
+  }
+
+  function toBase64(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function analyzeWithBackend(base64Data) {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdfBase64: base64Data })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Error del servidor');
+    if (!data.name) throw new Error('Respuesta vacía');
+    return data.name;
+  }
+
+  async function downloadFile(i) {
+    const f = files[i];
+    const blob = new Blob([f.file], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = f.newName;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function clearAll() {
+    files.length = 0;
+    document.getElementById('file-list').innerHTML = '';
+    document.getElementById('action-bar').style.display = 'none';
+    document.getElementById('progress-text').textContent = '';
+    document.getElementById('file-input').value = '';
+  }
+</script>
+</body>
+</html>
