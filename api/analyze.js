@@ -7,34 +7,15 @@ export default async function handler(req, res) {
     const { fileName, fileText } = req.body;
 
     if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: "Falta ANTHROPIC_API_KEY en Vercel" });
+      return res.status(500).json({
+        error: "Falta ANTHROPIC_API_KEY en Vercel"
+      });
     }
 
-    if (!fileText && !fileName) {
-      return res.status(400).json({ error: "No se recibió texto del PDF" });
-    }
+    const textoCorto = (fileText || fileName || "").slice(0, 3000);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000); // 60 segundos
-
-    const prompt = `
-Analizá este comprobante de retención argentino.
-
-Necesito que devuelvas SOLO un JSON válido con este formato:
-
-{
-  "emisor": "nombre del emisor",
-  "tipo_retencion": "IVA/Ganancias/IIBB/SUSS/Otro",
-  "fecha": "YYYY-MM-DD",
-  "nuevo_nombre": "emisor - tipo_retencion - fecha.pdf"
-}
-
-Nombre original del archivo:
-${fileName}
-
-Texto extraído del PDF:
-${fileText}
-`;
+    const timeout = setTimeout(() => controller.abort(), 45000);
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -44,13 +25,35 @@ ${fileText}
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: "claude-3-5-haiku-latest",
-        max_tokens: 500,
+        model: "claude-3-haiku-20240307",
+        max_tokens: 200,
         temperature: 0,
         messages: [
           {
             role: "user",
-            content: prompt
+            content: `
+Sos un asistente que renombra comprobantes de retenciones argentinas.
+
+Del siguiente texto o nombre de archivo extraé:
+- emisor
+- tipo_retencion
+- fecha
+
+Respondé SOLO JSON válido, sin explicación:
+
+{
+  "emisor": "nombre limpio",
+  "tipo_retencion": "IVA/Ganancias/IIBB/SUSS/Otro",
+  "fecha": "YYYY-MM-DD",
+  "nuevo_nombre": "emisor - tipo_retencion - fecha.pdf"
+}
+
+Archivo:
+${fileName}
+
+Texto:
+${textoCorto}
+`
           }
         ]
       }),
@@ -59,34 +62,34 @@ ${fileText}
 
     clearTimeout(timeout);
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorText = await response.text();
       return res.status(500).json({
         error: "Error de Anthropic",
-        detail: errorText
+        detail: data
       });
     }
 
-    const data = await response.json();
     const text = data.content?.[0]?.text || "";
 
-    let parsed;
-
     try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      return res.status(500).json({
-        error: "Claude no devolvió JSON válido",
+      const parsed = JSON.parse(text);
+      return res.status(200).json(parsed);
+    } catch {
+      return res.status(200).json({
+        emisor: "SIN_IDENTIFICAR",
+        tipo_retencion: "Otro",
+        fecha: new Date().toISOString().slice(0, 10),
+        nuevo_nombre: `SIN_IDENTIFICAR - Otro - ${new Date().toISOString().slice(0, 10)}.pdf`,
         raw: text
       });
     }
 
-    return res.status(200).json(parsed);
-
   } catch (error) {
     if (error.name === "AbortError") {
       return res.status(504).json({
-        error: "Claude tardó demasiado en responder. Intentá con otro PDF o texto más corto."
+        error: "Claude tardó demasiado en responder"
       });
     }
 
