@@ -6,98 +6,74 @@ export default async function handler(req, res) {
   try {
     const { fileName, fileText } = req.body;
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({
-        error: "Falta ANTHROPIC_API_KEY en Vercel"
-      });
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "Falta OPENAI_API_KEY" });
     }
 
-    const textoCorto = (fileText || fileName || "").slice(0, 3000);
+    const texto = (fileText || fileName || "").slice(0, 4000);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01"
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-latest",
-        max_tokens: 200,
+        model: "gpt-4o-mini",
         temperature: 0,
         messages: [
           {
             role: "user",
             content: `
-Sos un asistente que renombra comprobantes de retenciones argentinas.
+Analizá este comprobante de retención argentino.
 
-Del siguiente texto o nombre de archivo extraé:
+Extraé:
 - emisor
 - tipo_retencion
 - fecha
 
-Respondé SOLO JSON válido, sin explicación:
+Respondé SOLO JSON:
 
 {
-  "emisor": "nombre limpio",
-  "tipo_retencion": "IVA/Ganancias/IIBB/SUSS/Otro",
-  "fecha": "YYYY-MM-DD",
-  "nuevo_nombre": "emisor - tipo_retencion - fecha.pdf"
+ "emisor":"...",
+ "tipo_retencion":"...",
+ "fecha":"YYYY-MM-DD",
+ "nuevo_nombre":"emisor - tipo_retencion - fecha.pdf"
 }
 
-Archivo:
-${fileName}
+Archivo: ${fileName}
 
-Texto:
-${textoCorto}
+Texto: ${texto}
 `
           }
         ]
-      }),
-      signal: controller.signal
+      })
     });
-
-    clearTimeout(timeout);
 
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(500).json({
-        error: "Error de Anthropic",
-        detail: data
-      });
+      return res.status(500).json(data);
     }
 
-    const text = data.content?.[0]?.text || "";
+    const text = data.choices?.[0]?.message?.content || "";
 
     try {
       const parsed = JSON.parse(text);
       return res.status(200).json(parsed);
     } catch {
-      const hoy = new Date().toISOString().slice(0, 10);
-
       return res.status(200).json({
         emisor: "SIN_IDENTIFICAR",
         tipo_retencion: "Otro",
-        fecha: hoy,
-        nuevo_nombre: `SIN_IDENTIFICAR - Otro - ${hoy}.pdf`,
+        fecha: new Date().toISOString().slice(0,10),
+        nuevo_nombre: "archivo-renombrado.pdf",
         raw: text
       });
     }
 
   } catch (error) {
-    if (error.name === "AbortError") {
-      return res.status(504).json({
-        error: "Claude tardó demasiado en responder"
-      });
-    }
-
     return res.status(500).json({
-      error: "Error interno en /api/analyze",
-      detail: error.message
+      error: error.message
     });
   }
 }
